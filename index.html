@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Steganogram — hide messages in images</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --line:#262b36; --txt:#e7eaf0; --mut:#8b93a3; --acc:#6ee7a0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--txt); }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:19px; margin:0; }
+  header .tag { color:var(--mut); font-size:13px; }
+  main { max-width:960px; margin:24px auto; padding:0 16px; display:grid; gap:18px; }
+  nav { display:flex; gap:8px; }
+  nav button { background:var(--card); color:var(--txt); border:1px solid var(--line); padding:8px 16px; border-radius:8px; cursor:pointer; }
+  nav button.active { border-color:var(--acc); color:var(--acc); }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .panel h2 { margin:0 0 12px; font-size:16px; }
+  label { display:block; margin:10px 0 4px; color:var(--mut); font-size:13px; }
+  textarea, input[type=text], input[type=password], select {
+    width:100%; background:#12141a; color:var(--txt); border:1px solid var(--line);
+    border-radius:8px; padding:9px 11px; font:inherit;
+  }
+  textarea { min-height:90px; resize:vertical; }
+  input[type=file] { color:var(--mut); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  button.primary { background:var(--acc); color:#0b1020; border:0; border-radius:8px; padding:9px 18px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--txt); border:1px solid var(--line); border-radius:8px; padding:9px 14px; cursor:pointer; }
+  #log { font-family:ui-monospace,monospace; font-size:12.5px; color:var(--mut); background:#0c0e13; border:1px solid var(--line); border-radius:8px; padding:10px; min-height:48px; white-space:pre-wrap; }
+  img.preview { max-width:100%; max-height:340px; border-radius:8px; border:1px solid var(--line); margin-top:10px; }
+  details { margin-top:10px; }
+  summary { cursor:pointer; color:var(--mut); }
+  .foot { text-align:center; color:var(--mut); font-size:12.5px; padding:18px; }
+  .badge img { height:22px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Steganogram</h1>
+  <span class="tag">hide and reveal messages inside images, with a Pollinations LLM</span>
+  <span class="badge"><a href="https://pollinations.ai/?ref=badge"><img src="https://raw.githubusercontent.com/pollinations/pollinations/main/packages/ui/src/brand/badge-made-with.svg" alt="Made with pollinations.ai"></a></span>
+</header>
+
+<main>
+  <nav>
+    <button id="tab-hide" class="active">Hide a message</button>
+    <button id="tab-reveal">Reveal</button>
+    <button id="tab-settings">Settings</button>
+  </nav>
+
+  <!-- HIDE -->
+  <section id="panel-hide" class="panel">
+    <h2>Hide</h2>
+    <label for="msg">Secret message</label>
+    <textarea id="msg" placeholder="Your secret message…"></textarea>
+    <label>Cover image</label>
+    <div class="row">
+      <input type="file" id="coverFile" accept="image/*">
+      <span style="color:var(--mut)">or</span>
+      <button class="ghost" id="genCover">Generate cover with AI</button>
+    </div>
+    <label for="coverDesc">Cover description (used by the LLM → image)</label>
+    <input type="text" id="coverDesc" placeholder="a bookshop on a rainy street, watercolor" value="a quiet bookshop on a rainy street, watercolor, soft light">
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="doHide">Hide message in image</button>
+      <button class="ghost" id="dlPng" disabled>Download PNG</button>
+    </div>
+    <img id="hidePreview" class="preview" alt="result" style="display:none">
+  </section>
+
+  <!-- REVEAL -->
+  <section id="panel-reveal" class="panel" style="display:none">
+    <h2>Reveal</h2>
+    <label for="revealFile">Image with a hidden message</label>
+    <input type="file" id="revealFile" accept="image/*">
+    <div style="margin-top:12px"><button class="primary" id="doReveal">Reveal hidden message</button></div>
+    <img id="revealPreview" class="preview" alt="source" style="display:none">
+    <label for="out" style="margin-top:12px">Extracted message</label>
+    <textarea id="out" readonly placeholder="The message will appear here…"></textarea>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="panel-settings" class="panel" style="display:none">
+    <h2>Settings</h2>
+    <label for="mode">API mode</label>
+    <select id="mode">
+      <option value="classic">Classic API (free, rate-limited, no key)</option>
+      <option value="own">Own Pollen (enter your key — requests bill your wallet)</option>
+    </select>
+    <label for="key">API key (sk_… or pk_…)</label>
+    <input type="password" id="key" placeholder="sk_…  (optional in Classic mode)" autocomplete="off">
+    <label for="textModel">Text model</label>
+    <input type="text" id="textModel" value="openai/gpt-5.4-nano">
+    <label for="imgModel">Image model (Classic mode uses the classic image API)</label>
+    <input type="text" id="imgModel" value="black-forest-labs/flux.1-schnell">
+    <details>
+      <summary>How it works / privacy</summary>
+      <p style="color:var(--mut)">
+        Hide: the secret goes to the LLM, which returns an innocent cover prompt; the image API renders it;
+        your message is then embedded into the pixels (LSB) entirely in your browser. Reveal: LSB is read back out.
+        In <b>Own Pollen</b> mode every request is billed to the key you entered — your wallet, your expenses.
+        The key is stored only in this browser (localStorage) and sent only to pollinations.ai endpoints.
+      </p>
+    </details>
+  </section>
+
+  <section class="panel"><h2>Log</h2><div id="log">ready.</div></section>
+</main>
+
+<div class="foot">
+  <a href="https://pollinations.ai/?ref=badge"><img src="https://raw.githubusercontent.com/pollinations/pollinations/main/packages/ui/src/brand/badge-made-with.svg" alt="Made with pollinations.ai" style="height:20px"></a>
+  &nbsp;·&nbsp; Built for the POLLEN-QUEST #18367 · steganography in your browser
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
