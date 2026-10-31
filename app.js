@@ -94,7 +94,9 @@ function settings() {
   const base = mode === 'own'
     ? { text: 'https://gen.pollinations.ai/v1/chat/completions', img: 'https://gen.pollinations.ai/image' }
     : { text: 'https://text.pollinations.ai/openai', img: 'https://image.pollinations.ai/prompt' };
-  return { mode, key, base, textModel: $('textModel').value.trim() || 'openai/gpt-5.4-nano', imgModel: $('imgModel').value.trim() };
+  // Classic API serves its own free model only; catalog models need Own Pollen mode.
+  const textModel = mode === 'classic' ? 'openai' : ($('textModel').value.trim() || 'openai/gpt-5.4-nano');
+  return { mode, key, base, textModel, imgModel: $('imgModel').value.trim() };
 }
 
 async function llmInnocentPrompt(secret, s) {
